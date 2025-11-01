@@ -1,0 +1,24 @@
+name: CleanCache
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner On ubuntu-latest or self-hosted'
+        required: true
+        type: string
+
+permissions: write-all
+
+env:
+  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+jobs:
+  cleanup:
+    runs-on: ${{inputs.runner}}
+    steps:
+      - name: Checkout Projects
+        uses: actions/checkout@main
+
+      - name: Cache Clean
+        run: gh cache delete --all

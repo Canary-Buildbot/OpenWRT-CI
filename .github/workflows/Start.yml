@@ -1,0 +1,58 @@
+name: Start
+
+on:
+  #自动运行：每天早上6点
+  schedule:
+    - cron: 0 22 * * *
+  #手动运行
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner On ubuntu-latest or self-hosted'
+        required: true
+        type: string
+      package:
+        description: 'Manually adjust packages, separate with "\n".'
+        required: false
+        type: string
+      test:
+        description: 'Only output configuration files, do not build firmware.'
+        required: true
+        type: boolean
+
+permissions: write-all
+
+jobs:
+  CleanEnv:
+    name: CleanEnv
+    uses: ./.github/workflows/CleanEnv.yml
+    with:
+      runner: ${{ inputs.runner || 'ubuntu-latest' }}
+    secrets: inherit
+
+  BuildFirmware:
+    name: ${{matrix.CONFIG}}
+    needs: CleanEnv
+    uses: ./.github/workflows/BuildFirmware.yml
+    secrets: inherit
+    strategy:
+      fail-fast: false
+      matrix:
+        CONFIG: [IPQ60XX-WIFI-YES, IPQ60XX-WIFI-NO, IPQ807X-WIFI-YES, IPQ807X-WIFI-NO]
+        SOURCE: [VIKINGYFY/immortalwrt]
+        BRANCH: [main]
+    with:
+      runner: ${{ inputs.runner || 'ubuntu-latest' }}
+      WRT_CONFIG: ${{matrix.CONFIG}}
+      WRT_THEME: aurora
+      WRT_NAME: OWRT
+      WRT_SSID: OWRT
+      WRT_WORD: 12345678
+      WRT_IP: 192.168.10.1
+      WRT_PW: 无
+      WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
+      WRT_BRANCH: ${{matrix.BRANCH}}
+      WRT_SOURCE: ${{matrix.SOURCE}}
+      WRT_PACKAGE: ${{inputs.package}}
+      WRT_TEST: ${{inputs.test}}
+
