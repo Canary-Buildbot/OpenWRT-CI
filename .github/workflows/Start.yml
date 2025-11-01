@@ -36,7 +36,7 @@ jobs:
       matrix:
         CONFIG: [IPQ60XX-WIFI-YES, IPQ60XX-WIFI-NO]
         SOURCE: [Nanashi-Development/LiBwrt]
-        BRANCH: [main]
+        BRANCH: [k6.12-nss]
     with:
       runner: ${{ inputs.runner || 'ubuntu-latest' }}
       WRT_CONFIG: ${{matrix.CONFIG}}
