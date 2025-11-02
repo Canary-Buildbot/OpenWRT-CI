@@ -23,7 +23,7 @@ jobs:
     name: CleanEnv
     uses: ./.github/workflows/CleanEnv.yml
     with:
-      runner: ${{ inputs.runner || 'ubuntu-latest' }}
+      runner: ${{ inputs.runner || 'self-hosted' }}
     secrets: inherit
 
   BuildFirmware:
@@ -38,7 +38,7 @@ jobs:
         SOURCE: [Nanashi-Development/LiBwrt]
         BRANCH: [k6.12-nss]
     with:
-      runner: ${{ inputs.runner || 'ubuntu-latest' }}
+      runner: ${{ inputs.runner || 'self-hosted' }}
       WRT_CONFIG: ${{matrix.CONFIG}}
       WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
       WRT_BRANCH: ${{matrix.BRANCH}}
