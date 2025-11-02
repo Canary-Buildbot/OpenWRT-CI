@@ -43,5 +43,5 @@ jobs:
       WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
       WRT_BRANCH: ${{matrix.BRANCH}}
       WRT_SOURCE: ${{matrix.SOURCE}}
-      test: ${{inputs.test}}
+      test: ${{ inputs.test || false }}
 
