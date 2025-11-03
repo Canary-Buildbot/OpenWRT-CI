@@ -73,7 +73,7 @@ jobs:
             git clone --depth=1 --branch $WRT_BRANCH $WRT_REPO $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
           fi
 
-          sudo chown $USER:$USER $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
+          sudo chown $USER:$USER $GITHUB_WORKSPACE
 
       - name: Check Caches
         id: check-cache
