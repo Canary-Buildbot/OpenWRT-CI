@@ -11,7 +11,7 @@ on:
         description: 'Runner On ubuntu-latest or self-hosted'
         required: true
         type: string
-      test:
+      config_only:
         description: 'Only output configuration files, do not build firmware.'
         required: true
         type: boolean
@@ -19,16 +19,16 @@ on:
 permissions: write-all
 
 jobs:
-  CleanEnv:
-    name: CleanEnv
-    uses: ./.github/workflows/CleanEnv.yml
+  CleanGithub:
+    name: CleanGithub
+    uses: ./.github/workflows/CleanGithub.yml
     with:
       runner: ${{ inputs.runner || 'self-hosted' }}
     secrets: inherit
 
   BuildFirmware:
-    name: ${{matrix.CONFIG}}
-    needs: CleanEnv
+    name: ${{matrix.SOURCE}}
+    needs: CleanGithub
     uses: ./.github/workflows/BuildFirmware.yml
     secrets: inherit
     strategy:
@@ -39,9 +39,9 @@ jobs:
         BRANCH: [k6.12-nss]
     with:
       runner: ${{ inputs.runner || 'self-hosted' }}
-      WRT_CONFIG: ${{matrix.CONFIG}}
-      WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
-      WRT_BRANCH: ${{matrix.BRANCH}}
-      WRT_SOURCE: ${{matrix.SOURCE}}
-      test: ${{ inputs.test || false }}
+      config: ${{matrix.CONFIG}}
+      repo: https://github.com/${{matrix.SOURCE}}.git
+      branch: ${{matrix.BRANCH}}
+      source: ${{matrix.SOURCE}}
+      config_only: ${{ inputs.config_only || false }}
 

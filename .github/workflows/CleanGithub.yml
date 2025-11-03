@@ -1,4 +1,4 @@
-name: CleanEnv
+name: CleanGithub
 
 on:
   workflow_call:
@@ -11,7 +11,7 @@ on:
 permissions: write-all
 
 jobs:
-  CleanEnv:
+  CleanGithub:
     runs-on: ${{inputs.runner}}
     steps:
       - name: Delete old Releases and Workflows
@@ -22,4 +22,4 @@ jobs:
           releases_keep_latest: 0
           delete_tags: true
           delete_workflows: true
-          workflows_keep_day: 0
+          workflows_keep_day: 7

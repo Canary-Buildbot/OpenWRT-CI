@@ -8,32 +8,32 @@ on:
         description: 'Runner On ubuntu-latest or self-hosted'
         required: true
         type: string
-      WRT_CONFIG:
+      config:
         required: true
         type: string
-      WRT_REPO:
+      repo:
         required: true
         type: string
-      WRT_BRANCH:
+      branch:
         required: true
         type: string
-      WRT_SOURCE:
+      source:
         required: true
         type: string
-      test:
+      config_only:
         required: true
         type: boolean
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-  WRT_CONFIG: ${{inputs.WRT_CONFIG}}
-  WRT_REPO: ${{inputs.WRT_REPO}}
-  WRT_BRANCH: ${{inputs.WRT_BRANCH}}
-  WRT_SOURCE: ${{inputs.WRT_SOURCE}}
-  test: ${{inputs.test}}
+  WRT_CONFIG: ${{inputs.config}}
+  WRT_REPO: ${{inputs.repo}}
+  WRT_BRANCH: ${{inputs.branch}}
+  WRT_SOURCE: ${{inputs.source}}
+  CONFIG_ONLY: ${{inputs.config_only}}
 
 jobs:
   core:
-    name: ${{inputs.WRT_SOURCE}}
+    name: ${{inputs.config}}
     runs-on: ${{inputs.runner}}
     steps:
       - name: Checkout Projects
@@ -62,73 +62,41 @@ jobs:
           sudo -E systemctl daemon-reload
           sudo -E timedatectl set-timezone "Asia/Shanghai"
 
-      - name: Initialization Values
+      - name: Clone & Update Code
         run: |
-          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")" >> $GITHUB_ENV
-          echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" >> $GITHUB_ENV
-          echo "WRT_INFO=${WRT_SOURCE%%/*}" >> $GITHUB_ENV
-          echo "WRT_TARGET=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' ./Config/$WRT_CONFIG.txt)" >> $GITHUB_ENV
-          echo "WRT_KVER=none" >> $GITHUB_ENV
-          echo "WRT_LIST=none" >> $GITHUB_ENV
-
-      - name: Clone Code
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/${{inputs.WRT_SOURCE}}
-          sudo chown $USER:$USER $GITHUB_WORKSPACE/${{inputs.WRT_SOURCE}}
-          # create (or leave) a symlink from workspace/<source> to workspace/wrt
-          if [ -L "$GITHUB_WORKSPACE/wrt" ] || [ -e "$GITHUB_WORKSPACE/wrt" ]; then
-            # if a file/symlink/dir exists, remove the symlink only when it's a broken symlink
-            if [ -L "$GITHUB_WORKSPACE/wrt" ] && [ ! -e "$GITHUB_WORKSPACE/wrt" ]; then
-              rm -f $GITHUB_WORKSPACE/wrt
-              ln -s $GITHUB_WORKSPACE/${{inputs.WRT_SOURCE}} $GITHUB_WORKSPACE/wrt
-            fi
+          if [ -d $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}} ]; then
+            echo "Directory exists"
+            cd $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
+            git pull
           else
-            ln -s $GITHUB_WORKSPACE/${{inputs.WRT_SOURCE}} $GITHUB_WORKSPACE/wrt
+            echo "Directory does not exist"
+            git clone --depth=1 --branch $WRT_BRANCH $WRT_REPO $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
           fi
 
-          # If ./wrt is already a git repo, update it; if it's a dir but not a git repo, clear and clone; otherwise clone.
-          if [ -d "./wrt/.git" ]; then
-            echo "wrt is a git repository — fetching and updating branch $WRT_BRANCH"
-            cd ./wrt/
-            git fetch --depth=1 origin "$WRT_BRANCH" || true
-            git checkout -f "$WRT_BRANCH" || git checkout -B "$WRT_BRANCH" "origin/$WRT_BRANCH"
-            git pull --rebase --autostash origin "$WRT_BRANCH" || true
-          elif [ -d "./wrt" ] && [ ! -d "./wrt/.git" ]; then
-            echo "wrt exists but is not a git repo — cleaning and cloning"
-            rm -rf ./wrt/* ./wrt/.[!.]* ./wrt/..?* 2>/dev/null || true
-            git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
-          else
-            echo "cloning repository into ./wrt/"
-            git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
-          fi
-
-          cd ./wrt/ && echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
-
-      - name: Check Scripts
-        run: |
-          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
+          sudo chown $USER:$USER $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
 
       - name: Check Caches
         id: check-cache
-        if: env.test != 'true'
+        if: env.CONFIG_ONLY != 'true' && inputs.runner != 'self-hosted'
         uses: actions/cache@main
         with:
-          key: ${{env.WRT_CONFIG}}-${{env.WRT_INFO}}-${{env.WRT_HASH}}
-          restore-keys: ${{env.WRT_CONFIG}}-${{env.WRT_INFO}}
+          key: ${{inputs.source}}-${{inputs.branch}}-${{env.WRT_HASH}}-${{env.WRT_CONFIG}}
+          restore-keys: ${{inputs.source}}-${{inputs.branch}}
           path: |
-            ./wrt/.ccache
-            ./wrt/staging_dir/host*
-            ./wrt/staging_dir/tool*
+            $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}/.ccache
+            $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}/staging_dir/host*
+            $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}/staging_dir/tool*
 
       - name: Update Caches
-        if: env.test != 'true'
+        if: env.CONFIG_ONLY != 'true' && inputs.runner != 'self-hosted'
         run: |
-          if [ -d "./wrt/staging_dir" ]; then
-            find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
+          path="$GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}/staging_dir"
+          if [ -d "$path" ]; then
+            find "$path" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
               find "$DIR" -type f -exec touch {} +
             done
 
-            mkdir -p ./wrt/tmp && echo "1" > ./wrt/tmp/.build
+            mkdir -p "$path/tmp" && echo "1" > "$path/tmp/.build"
 
             echo "toolchain skiped done!"
           else
@@ -136,7 +104,8 @@ jobs:
           fi
 
           if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
-            CACHE_LIST=$(gh cache list --key "$WRT_CONFIG-$WRT_INFO" | cut -f 1)
+            KEY="${{inputs.source}}-${{inputs.branch}}"
+            CACHE_LIST=$(gh cache list --key "$KEY" | cut -f 1)
             for CACHE_KEY in $CACHE_LIST; do
               gh cache delete $CACHE_KEY
             done
@@ -146,14 +115,14 @@ jobs:
 
       - name: Update Feeds
         run: |
-          cd ./wrt/
+          cd $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
 
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Custom Settings
         run: |
-          cd ./wrt/
+          cd $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
 
           cat $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt $GITHUB_WORKSPACE/Config/DIFF.txt >> .config          
 
@@ -162,35 +131,33 @@ jobs:
           make defconfig -j$(nproc) && make clean -j$(nproc)
 
       - name: Download Packages
-        if: env.test != 'true'
+        if: env.CONFIG_ONLY != 'true'
         run: |
-          cd ./wrt/
+          cd $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
 
           make download -j$(nproc)
 
       - name: Compile Firmware
-        if: env.test != 'true'
+        if: env.CONFIG_ONLY != 'true'
         run: |
-          cd ./wrt/
+          cd $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}}
 
           make -j$(nproc) || make -j1 V=s
 
       - name: Package Firmware
         run: |
-          cd ./wrt/ && mkdir ./upload/
+          cd $GITHUB_WORKSPACE/${{inputs.source}}/${{inputs.branch}} && mkdir upload
 
-          cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
+          cp -f ./.config ./upload/Config.txt
 
-          if [[ $test != 'true' ]]; then
-            echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV
-            echo "WRT_LIST=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | tr '\n' ' ')" >> $GITHUB_ENV
-
+          if [[ $CONFIG_ONLY != 'true' ]]; then
             find ./bin/targets/ -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" -exec rm -rf {} +
-
+            
+            WRT_TARGET=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt)
             for FILE in $(find ./bin/targets/ -type f -iname "*$WRT_TARGET*") ; do
               EXT=$(basename $FILE | cut -d '.' -f 2-)
               NAME=$(basename $FILE | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*")
-              NEW_FILE="$WRT_INFO"-"$WRT_BRANCH"-"$NAME"-"$WRT_DATE"."$EXT"
+              NEW_FILE="$NAME"."$EXT"
               mv -f $FILE ./upload/$NEW_FILE
             done
 
@@ -202,12 +169,9 @@ jobs:
       - name: Release Firmware
         uses: softprops/action-gh-release@master
         with:
-          tag_name: ${{env.WRT_CONFIG}}-${{env.WRT_INFO}}-${{env.WRT_BRANCH}}-${{env.WRT_DATE}}
+          tag_name: ${{inputs.source}}/${{inputs.branch}}@${{env.WRT_GIT_HASH}}:${{env.WRT_CONFIG}}
           files: ./wrt/upload/*.*
           body: |
-            源码：${{env.WRT_REPO}}
-            分支：${{env.WRT_BRANCH}}
-            提交：${{env.WRT_HASH}}
-            内核版本：${{env.WRT_KVER}}
-            插件列表：${{env.WRT_LIST}}
-            
+            源码：${{inputs.source}}
+            分支：${{inputs.branch}}
+            提交：${{env.WRT_GIT_HASH}}
